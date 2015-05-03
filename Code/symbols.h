@@ -1,7 +1,107 @@
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 #include "tree.h"
+
+#ifndef _SYMBOLS_H_
+#define _SYMBOLS_H_
+
+//链表头部插入宏。head为头指针，p为要插入元素的指针。
+#define insert_head(head,p) \
+	do \
+	{ \
+		(p)->next=(head); \
+		(head)=(p); \
+	}while(0)
+
+struct type_d;
+struct val_d;
+
+//变量的类型：int，float，用户自定义类型（数组，结构体）
+typedef enum val_kind
+{
+	INT,FLOAT,USER_DEFINED
+}val_kind;
+//用户自定义类型：结构体，数组
+typedef enum type_kind
+{
+	STRUCT,ARRAY
+}type_kind;
+
+//数组定义的单元，数组定义用链表表示。
+typedef struct array_def_list
+{
+	int dimension;					//该层的维度。从0层开始。即基本类型（如int a）是0层。
+	int number;						//该层有几个元素
+	int size_of_each;				//每个元素多大。（目前认为，struct的大小和int一样，即4字节）
+	val_kind kind;					//基本元素是什么：int,float,struct
+	struct type_d* val_type;		//struct定义指针，如果需要
+	struct array_def_list* next;	//降一维度指针
+}array_def_list;
+//结构体定义单元。该结构体有几个域，每个域的定义
+typedef struct struct_def_list
+{
+	int define_count;			//该结构体有几个域
+	struct val_d** def_list;	//每个域的定义
+}struct_def_list;
+
+//变量定义单元。有函数参数，用户变量，结构体内变量。
+typedef struct val_d
+{
+	char name[MAX_LEN_OF_NAME];		//名称
+	bool is_true_value;				//是否是真的变量，即是否可以直接使用，因为结构体中的域不能直接使用
+	val_kind kind;					//类型：int，float，用户定义类型
+	struct type_d* val_type;		//用户定义类型的定义结构体指针（如果需要）
+	struct val_d* next;				//下一个单元地址
+}val_d;
+//类型定义单元。
+typedef struct type_d
+{
+	char name[MAX_LEN_OF_NAME];	//名称。数组没有名称
+	type_kind kind;				//类型：结构体，数组
+	union
+	{
+		array_def_list* a;
+		struct_def_list* s;
+	}def;						//类型具体定义。a为数组定义地址，s为结构体定义地址
+	struct type_d* next;		//下一个单元地址
+}type_d;
+//函数定义单元。
+typedef struct func_d
+{
+	char name[MAX_LEN_OF_NAME];	//名称
+	int parameter_count;		//参数个数
+	val_d** parameters;			//参数定义列表
+	type_d* return_type;		//返回值类型定义
+	struct func_d* next;		//下一个单元地址
+}func_d;
+#endif
+
+//下面初始化函数和整个符号表的析构函数。
 void init_symbol_table();
 void destroy_symbol_table();
-int add_type_declaration(Node* r);
-int add_function_declaration(Node* r);
-int add_value_declaration(Node* r);
+
+//下面是3个构造函数，动态分配出新的表项，返回其地址。
+type_d* new_type(const char* name);
+func_d* new_function(const char* name);
+val_d* new_value(const char* name);
+
+//辅助函数，操作数组定义时候使用。分别为创建一个基类型层，以及在已经有基类型层基础上拓展一个维度。
+void array_generate_basic_dimension(type_d* t,int number,val_kind kind,type_d* val_type);
+void array_expand_dimension(type_d* t,int number);
+
+//辅助函数，判断两个类型是否相等。
+bool type_equal(type_d* p,type_d* q);
+
+//辅助函数。获得下一个别名,别名不会重复，一般而言不会与用户定义变量重名。用于匿名struct等场景使用。别名放在dest中。
+void get_a_name(char* name);
+
+//下面是3个查询函数。查询成功则返回对应定义指针，失败则返回NULL。
+type_d* find_type(const char* name);
+func_d* find_function(const char* name);
+val_d* find_value(const char* name);
+
+//下面是3个添加函数。在已经构造好表项后，将其添加进符号表中对应的位置。返回刚刚被添加进去的表项。
+type_d* add_type_declaration(type_d* r);
+func_d* add_function_declaration(func_d* r);
+val_d* add_value_declaration(val_d* r);
