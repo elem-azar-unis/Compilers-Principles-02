@@ -75,7 +75,18 @@ typedef struct func_d
 	type_d* return_type;		//返回值类型定义
 	struct func_d* next;		//下一个单元地址
 }func_d;
+//为了作用域而实现的变量定义表栈。利用头部插入，取头部，头部删除等实现。
+typedef struct value_stack
+{
+	val_d* values;				//变量定义表
+	struct value_stack* next;	//下一个
+}value_stack;
 #endif
+
+//栈操作函数。push和pop，查看某一个变量能否在栈顶定义（true表示栈顶没有这个变量定义，false表示栈顶已有这个变量定义）。
+void value_stack_push();
+void value_stack_pop();
+bool value_stack_check(const char* name);
 
 //下面初始化函数和整个符号表的析构函数。
 void init_symbol_table();

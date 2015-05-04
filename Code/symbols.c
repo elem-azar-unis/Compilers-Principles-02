@@ -10,7 +10,7 @@ struct
 {
 	type_d* types;
 	func_d* funcs;
-	val_d* values;
+	value_stack* values;
 }symbols;
 
 void itoa(unsigned long val, char* buf,unsigned radix)
@@ -61,18 +61,12 @@ void init_symbol_table()
 	symbols.types=NULL;
 	symbols.funcs=NULL;
 	symbols.values=NULL;
+	value_stack_push();
 }
 void destroy_symbol_table()
 {
-	{
-		val_d* p;
-		while(symbols.values!=NULL)
-		{
-			p=symbols.values;
-			symbols.values=symbols.values->next;
-			free(p);
-		}
-	}
+	while(symbols.values!=NULL)
+		value_stack_pop();
 	{
 		func_d* p;
 		while(symbols.funcs!=NULL)
@@ -132,12 +126,17 @@ func_d* find_function(const char* name)
 }
 val_d* find_value(const char* name)
 {
-	val_d* p=symbols.values;
-	while(p!=NULL)
+	value_stack* q=symbols.values;
+	while(q!=NULL)
 	{
-		if(strcmp(name,p->name)==0)
-			return p;
-		p=p->next;
+		val_d* p=q->values;
+		while(p!=NULL)
+		{
+			if(strcmp(name,p->name)==0)
+				return p;
+			p=p->next;
+		}
+		q=q->next;
 	}
 	return NULL;
 }
@@ -153,7 +152,7 @@ func_d* add_function_declaration(func_d* r)
 }
 val_d* add_value_declaration(val_d* r)
 {
-	insert_head(symbols.values,r);
+	insert_head(symbols.values->values,r);
 	return r;
 }
 type_d* new_type(const char* name)
@@ -228,4 +227,35 @@ bool type_equal(type_d* p,type_d* q)
 	if(p->def.a->dimension==q->def.a->dimension && p->def.a->kind==q->def.a->kind && p->def.a->val_type==q->def.a->val_type)
 		return true;
 	return false;
+}
+void value_stack_push()
+{
+	value_stack* p=(value_stack*)malloc(sizeof(value_stack));
+	p->values=NULL;
+	p->next=NULL;
+	insert_head(symbols.values,p);
+}
+void value_stack_pop()
+{
+	val_d* p;
+	while(symbols.values->values!=NULL)
+	{
+		p=symbols.values->values;
+		symbols.values->values=symbols.values->values->next;
+		free(p);
+	}
+	value_stack* q=symbols.values;
+	symbols.values=symbols.values->next;
+	free(q);
+}
+bool value_stack_check(const char* name)
+{
+	val_d* p=symbols.values->values;
+	while(p!=NULL)
+	{
+		if(strcmp(p->name,name)==0)
+			return false;
+		p=p->next;
+	}
+	return true;
 }
