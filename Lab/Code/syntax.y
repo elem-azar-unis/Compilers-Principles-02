@@ -175,7 +175,11 @@ int main(int argc,char** argv)
 	}
 	yyrestart(f);
 	if(yyparse()==0 && !error_occured)
-		print_tree(head);
+	{
+		init_symbol_table();
+		semantic_analysis(head);
+		destroy_symbol_table();
+	}
 	destroy_tree(head);
 	fclose(f);
 	return 0;

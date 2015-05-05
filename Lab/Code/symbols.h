@@ -20,12 +20,12 @@ struct val_d;
 //变量的类型：int，float，用户自定义类型（数组，结构体）
 typedef enum val_kind
 {
-	INT,FLOAT,USER_DEFINED
+	_int,_float,USER_DEFINED
 }val_kind;
 //用户自定义类型：结构体，数组
 typedef enum type_kind
 {
-	STRUCT,ARRAY
+	_struct,_array
 }type_kind;
 
 //数组定义的单元，数组定义用链表表示。
@@ -71,7 +71,8 @@ typedef struct func_d
 {
 	char name[MAX_LEN_OF_NAME];	//名称
 	int parameter_count;		//参数个数
-	val_d** parameters;			//参数定义列表
+	val_d** parameters;		//参数定义列表
+	val_kind return_kind;
 	type_d* return_type;		//返回值类型定义
 	struct func_d* next;		//下一个单元地址
 }func_d;

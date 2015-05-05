@@ -1,6 +1,7 @@
 %{
 #include "tree.h"
 #include <stdbool.h>
+#include "semantics.h"
 #define YYSTYPE Node*
 #include "syntax.tab.h"
 int yycolumn = 1;

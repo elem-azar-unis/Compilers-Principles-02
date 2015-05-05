@@ -83,7 +83,7 @@ void destroy_symbol_table()
 		{
 			p=symbols.types;
 			symbols.types=symbols.types->next;
-			if(p->kind==STRUCT)
+			if(p->kind==_struct)
 			{
 				free(p->def.s->def_list);
 				free(p->def.s);
@@ -107,7 +107,7 @@ type_d* find_type(const char* name)
 	type_d* p=symbols.types;
 	while(p!=NULL)
 	{
-		if(p->kind==STRUCT && strcmp(name,p->name)==0)
+		if(p->kind==_struct && strcmp(name,p->name)==0)
 			return p;
 		p=p->next;
 	}
@@ -162,7 +162,7 @@ type_d* new_type(const char* name)
 	if(name!=NULL)
 	{
 		strcpy(p->name,name);
-		p->kind=STRUCT;
+		p->kind=_struct;
 		p->def.s=(struct_def_list*)malloc(sizeof(struct_def_list));
 		p->def.s->define_count=0;
 		p->def.s->def_list=NULL;
@@ -170,7 +170,7 @@ type_d* new_type(const char* name)
 	else
 	{
 		p->name[0]='\0';
-		p->kind=ARRAY;
+		p->kind=_array;
 		p->def.a=NULL;
 	}
 	return p;
@@ -191,7 +191,7 @@ val_d* new_value(const char* name)
 	strcpy(p->name,name);
 	p->next=NULL;
 	p->is_true_value=true;
-	p->kind=INT;
+	p->kind=_int;
 	p->val_type=NULL;
 	return p;
 }
@@ -222,7 +222,7 @@ bool type_equal(type_d* p,type_d* q)
 		return true;
 	if(p->kind!=q->kind)
 		return false;
-	if(p->kind==STRUCT)
+	if(p->kind==_struct)
 		return false;
 	if(p->def.a->dimension==q->def.a->dimension && p->def.a->kind==q->def.a->kind && p->def.a->val_type==q->def.a->val_type)
 		return true;
@@ -257,5 +257,5 @@ bool value_stack_check(const char* name)
 			return false;
 		p=p->next;
 	}
-	return true;
+	return find_type(name)==NULL;
 }
