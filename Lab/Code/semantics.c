@@ -1,21 +1,31 @@
 #include "semantics.h"
 #include "symbols.h"
 val_kind kind=USER_DEFINED;			//当前处理类型：int，float，用户定义类型
-struct type_d* val_type=NULL;		//当前处理的用户定义类型的定义结构体指针（如果需要）
+type_d* val_type=NULL;				//当前处理的用户定义类型的定义结构体指针（如果需要）
+func_d* current_func=NULL;			//当前正在处理的函数定义指针。
 int para_count=0;					//参数数目。
-val_d* paras[100];					//各参数定义。不想些链表了。一个结构体，一个函数的变量、参数不超过100个。
+val_d* paras[100];					//各参数定义。不想用链表了。一个结构体，一个函数的变量、参数不超过100个。
 int need_count=0;					//是否需要记录定义的变量。
 int do_not_push=0;					//提醒在函数刚建立的CompSt不需要push符号表。
+val_d* last_val=NULL;				//最近定义的变量。
 typedef struct stack
 {
 	val_kind kind;						//当前处理类型：int，float，用户定义类型
 	struct type_d* val_type;			//当前处理的用户定义类型的定义结构体指针（如果需要）
 	int para_count;						//参数数目。
-	val_d* paras[100];					//各参数定义。不想些链表了。一个结构体，一个函数的变量、参数不超过100个。
+	val_d* paras[100];					//各参数定义。不想些链表了。一个结构体、一个函数的变量，参数不超过100个。
 	int need_count;						//是否需要记录定义的变量。
 	struct stack* next;
 }stack;
 stack* st_head=NULL;
+typedef enum id_type
+{
+	id_val,id_func
+}id_type;
+//处理exp节点的函数。在exp_kind和exp_type中返回分析后的exp类型。如果exp_kind=USER_DEFINED，exp_type=NULL，则此处EXP已经发生过错误且已经输出。
+void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h);
+//根据传入的名称(h->name)和类型，检查id是否存在。不存在则报错返回null，存在则返回定义指针。
+void* check_id(Node* h,id_type identity);
 void push()
 {
 	stack* p=(stack*)malloc(sizeof(stack));
@@ -101,6 +111,17 @@ void semantic_analysis(Node* h)
 			}
 			break;
 		}
+		case CompSt:
+		{
+			if(do_not_push)
+				do_not_push=0;
+			else
+				value_stack_push();
+			semantic_analysis(h->child[1]);
+			semantic_analysis(h->child[2]);
+			value_stack_pop();
+			break;
+		}
 		case ExtDef:
 		{
 			/* 此处是定义，依据第二个子结点是ExtDecList,SEMI,FunDec,
@@ -110,10 +131,12 @@ void semantic_analysis(Node* h)
 			{
 				func_d* temp=find_function(h->child[1]->child[0]->name);
 				if(temp!=NULL)
-					printf("Error type 4 at Line %d: function %s is defined.\n",h->line,h->child[1]->child[0]->name);
+					printf("Error type 4 at Line %d: function %s is redefined.\n",h->line,h->child[1]->child[0]->name);
 				else
 				{
 					temp=new_function(h->child[1]->child[0]->name);
+					add_function_declaration(temp);
+					current_func=temp;
 					temp->return_type=val_type;
 					temp->return_kind=kind;
 					value_stack_push();
@@ -122,9 +145,13 @@ void semantic_analysis(Node* h)
 					para_count=0;
 					semantic_analysis(h->child[1]->child[2]);
 					temp->parameter_count=para_count;
-					temp->parameters=(val_d**)malloc(sizeof(val_d*)*para_count);
+					temp->kinds=(val_kind*)malloc(sizeof(val_kind)*para_count);
+					temp->parameters=(type_d**)malloc(sizeof(val_d*)*para_count);
 					for(int i=0;i<para_count;i++)
-						temp->parameters[i]=paras[i];
+					{
+						temp->kinds[i]=paras[i]->kind;
+						temp->parameters[i]=paras[i]->val_type;
+					}
 					need_count=0;
 					semantic_analysis(h->child[2]);
 					do_not_push=0;
@@ -141,7 +168,8 @@ void semantic_analysis(Node* h)
 			while(temp->child_count!=1)
 				temp=temp->child[0];
 			temp=temp->child[0];
-			if(!value_stack_check(temp->name))
+			int check=value_stack_check(temp->name);
+			if(!check)
 			{
 				val_d* che=find_value(temp->name);
 				int i=-1;
@@ -150,9 +178,10 @@ void semantic_analysis(Node* h)
 						if(paras[i]==che)
 							break;
 				if(i==para_count||i==-1)
-					printf("Error type 3 at Line %d: variable %s is defined.\n",h->line,temp->name);
+					printf("Error type 3 at Line %d: variable %s is redefined.\n",h->line,temp->name);
 				else
-					printf("Error type 15 at Line %d: Redefined field %s.",h->line,temp->name);
+					printf("Error type 15 at Line %d: Redefined field %s.\n",h->line,temp->name);
+				last_val=NULL;
 			}
 			else if(!(kind==USER_DEFINED && val_type==NULL))
 			{
@@ -177,10 +206,69 @@ void semantic_analysis(Node* h)
 					}
 				}
 				add_value_declaration(v);
+				last_val=v;
 				if(need_count)
 				{
 					paras[para_count]=v;
 					para_count++;
+				}
+			}
+			break;
+		}
+		case Stmt:
+		{
+			//根据第一个子结点的不同，分别作不同的处理
+			switch(h->child[0]->type)
+			{
+				case Exp:
+				{
+					val_kind temp1;
+					type_d* temp2;
+					ana_exp(&temp1,&temp2,h->child[0]);
+					break;
+				}
+				case CompSt:
+				{
+					semantic_analysis(h->child[0]);
+					break;
+				}
+				case _RETURN:
+				{
+					val_kind temp1;
+					type_d* temp2;
+					ana_exp(&temp1,&temp2,h->child[1]);
+					if(!(temp1==USER_DEFINED && temp2==NULL))
+						if(current_func->return_kind!= temp1 || current_func->return_type!=temp2)
+							printf("Error type 8 at Line %d: invalid return type\n",h->line);
+					break;
+				}
+				default:
+				{
+					val_kind temp1;
+					type_d* temp2;
+					ana_exp(&temp1,&temp2,h->child[2]);
+					for(int i=4;i<h->child_count;i++)
+						semantic_analysis(h->child[i]);
+					break;
+				}
+			}
+			break;
+		}
+		case Dec:
+		{
+			semantic_analysis(h->child[0]);
+			if(h->child_count==3)
+			{
+				if(need_count==1 && do_not_push==0)
+					printf("Error type 15 at Line %d: can't initialize a field while defining the struct\n",h->line);
+				else
+				{
+					val_kind temp1;
+					type_d* temp2;
+					ana_exp(&temp1,&temp2,h->child[2]);
+					if(!(temp1==USER_DEFINED && temp2==NULL) && last_val!=NULL)
+						if(last_val->kind!=temp1 || last_val->val_type!=temp2)
+							printf("Error type 5 at Line %d: incompatible type near =\n",h->line);
 				}
 			}
 			break;
@@ -191,5 +279,26 @@ void semantic_analysis(Node* h)
 				semantic_analysis(h->child[i]);
 			break;
 		}
+	}
+}
+void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h)
+{
+	
+}
+void* check_id(Node* h,id_type identity)
+{
+	if(identity==id_func)
+	{
+		func_d* temp=find_function(h->name);
+		if(temp==NULL)
+			printf("Error type 2 at Line %d: undefined function %s\n",h->line,h->name);
+		return temp;
+	}
+	else
+	{
+		val_d* temp=find_value(h->name);
+		if(temp==NULL)
+			printf("Error type 1 at Line %d: undefined variable %s\n",h->line,h->name);
+		return temp;
 	}
 }

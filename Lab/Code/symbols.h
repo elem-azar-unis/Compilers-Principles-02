@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include "tree.h"
 
@@ -49,7 +48,7 @@ typedef struct struct_def_list
 typedef struct val_d
 {
 	char name[MAX_LEN_OF_NAME];		//名称
-	bool is_true_value;				//是否是真的变量，即是否可以直接使用，因为结构体中的域不能直接使用
+	int is_true_value;				//是否是真的变量，即是否可以直接使用，因为结构体中的域不能直接使用
 	val_kind kind;					//类型：int，float，用户定义类型
 	struct type_d* val_type;		//用户定义类型的定义结构体指针（如果需要）
 	struct val_d* next;				//下一个单元地址
@@ -71,7 +70,8 @@ typedef struct func_d
 {
 	char name[MAX_LEN_OF_NAME];	//名称
 	int parameter_count;		//参数个数
-	val_d** parameters;		//参数定义列表
+	val_kind* kinds;			//参数类型标志
+	type_d** parameters;			//参数定义列表(如果某参数需要)
 	val_kind return_kind;
 	type_d* return_type;		//返回值类型定义
 	struct func_d* next;		//下一个单元地址
@@ -87,7 +87,7 @@ typedef struct value_stack
 //栈操作函数。push和pop，查看某一个变量能否在栈顶定义（true表示栈顶没有这个变量定义，false表示栈顶已有这个变量定义）。
 void value_stack_push();
 void value_stack_pop();
-bool value_stack_check(const char* name);
+int value_stack_check(const char* name);
 
 //下面初始化函数和整个符号表的析构函数。
 void init_symbol_table();
@@ -103,7 +103,7 @@ void array_generate_basic_dimension(type_d* t,int number,val_kind kind,type_d* v
 void array_expand_dimension(type_d* t,int number);
 
 //辅助函数，判断两个类型是否相等。
-bool type_equal(type_d* p,type_d* q);
+int type_equal(type_d* p,type_d* q);
 
 //辅助函数。获得下一个别名,别名不会重复，一般而言不会与用户定义变量重名。用于匿名struct等场景使用。别名放在dest中。
 void get_a_name(char* name);

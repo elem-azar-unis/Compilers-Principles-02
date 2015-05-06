@@ -1,5 +1,11 @@
+struct haha
+{
+int c;
+struct{int d;}e;
+}i;
 int main()
 {
-	int i = 1;
 	int j;
+	struct haha i;
+	{int i;}
 }

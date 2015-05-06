@@ -73,6 +73,7 @@ void destroy_symbol_table()
 		{
 			p=symbols.funcs;
 			symbols.funcs=symbols.funcs->next;
+			free(p->kinds);
 			free(p->parameters);
 			free(p);
 		}
@@ -182,6 +183,7 @@ func_d* new_function(const char* name)
 	strcpy(p->name,name);
 	p->parameter_count=0;
 	p->parameters=NULL;
+	p->kinds=NULL;
 	p->return_type=NULL;
 	return p;
 }
@@ -190,7 +192,7 @@ val_d* new_value(const char* name)
 	val_d* p=(val_d*)malloc(sizeof(val_d));
 	strcpy(p->name,name);
 	p->next=NULL;
-	p->is_true_value=true;
+	p->is_true_value=1;
 	p->kind=_int;
 	p->val_type=NULL;
 	return p;
@@ -216,17 +218,17 @@ void array_expand_dimension(type_d* t,int number)
 	p->next=NULL;
 	insert_head(t->def.a,p);
 }
-bool type_equal(type_d* p,type_d* q)
+int type_equal(type_d* p,type_d* q)
 {
 	if(p==q)
-		return true;
+		return 1;
 	if(p->kind!=q->kind)
-		return false;
+		return 0;
 	if(p->kind==_struct)
-		return false;
+		return 0;
 	if(p->def.a->dimension==q->def.a->dimension && p->def.a->kind==q->def.a->kind && p->def.a->val_type==q->def.a->val_type)
-		return true;
-	return false;
+		return 1;
+	return 0;
 }
 void value_stack_push()
 {
@@ -248,14 +250,17 @@ void value_stack_pop()
 	symbols.values=symbols.values->next;
 	free(q);
 }
-bool value_stack_check(const char* name)
+int value_stack_check(const char* name)
 {
 	val_d* p=symbols.values->values;
 	while(p!=NULL)
 	{
 		if(strcmp(p->name,name)==0)
-			return false;
+			return 0;
 		p=p->next;
 	}
-	return find_type(name)==NULL;
+	type_d* temp=find_type(name);
+	if(temp==NULL)
+		return 1;
+	return 0;
 }
