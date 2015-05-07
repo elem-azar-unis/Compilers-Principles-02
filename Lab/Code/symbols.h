@@ -30,7 +30,7 @@ typedef enum type_kind
 //数组定义的单元，数组定义用链表表示。
 typedef struct array_def_list
 {
-	int dimension;					//该层的维度。从0层开始。即基本类型（如int a）是0层。
+	int dimension;					//该层的维度。从0层开始。即一级（如int a[]）是0层。
 	int number;						//该层有几个元素
 	int size_of_each;				//每个元素多大。（目前认为，struct的大小和int一样，即4字节）
 	val_kind kind;					//基本元素是什么：int,float,struct

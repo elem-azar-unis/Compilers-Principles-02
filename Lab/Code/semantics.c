@@ -26,6 +26,8 @@ typedef enum id_type
 void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h);
 //根据传入的名称(h->name)和类型，检查id是否存在。不存在则报错返回null，存在则返回定义指针。
 void* check_id(Node* h,id_type identity);
+//检查传入的Node*是否可以有左值
+int check_left(Node* h);
 void push()
 {
 	stack* p=(stack*)malloc(sizeof(stack));
@@ -52,16 +54,18 @@ void pop()
 }
 void semantic_analysis(Node* h)
 {
-	if(h==NULL)return;
+	//printf("%s %d\n",get_type_name(h->type),h->line);
+	if(h==NULL)return;	
 	switch(h->type)
 	{
 		case Specifier:
-		{
+		{			
 			//在这里获得当前处理的类型，更改全局变量
 			if(h->child[0]->type==_TYPE)
 			{
 				if(strcmp(h->child[0]->name,"int")==0)kind=_int;
 				else kind=_float;
+				val_type=NULL;
 			}
 			else
 			{
@@ -129,6 +133,7 @@ void semantic_analysis(Node* h)
 			 */
 			if(h->child[1]->type==FunDec)
 			{
+				semantic_analysis(h->child[0]);
 				func_d* temp=find_function(h->child[1]->child[0]->name);
 				if(temp!=NULL)
 					printf("Error type 4 at Line %d: function %s is redefined.\n",h->line,h->child[1]->child[0]->name);
@@ -247,6 +252,8 @@ void semantic_analysis(Node* h)
 					val_kind temp1;
 					type_d* temp2;
 					ana_exp(&temp1,&temp2,h->child[2]);
+					if(temp1!=_int && !(temp1==USER_DEFINED && temp2==NULL))
+						printf("Error type 7 at Line %d: only int can be used as boolean\n",h->line);
 					for(int i=4;i<h->child_count;i++)
 						semantic_analysis(h->child[i]);
 					break;
@@ -267,7 +274,7 @@ void semantic_analysis(Node* h)
 					type_d* temp2;
 					ana_exp(&temp1,&temp2,h->child[2]);
 					if(!(temp1==USER_DEFINED && temp2==NULL) && last_val!=NULL)
-						if(last_val->kind!=temp1 || last_val->val_type!=temp2)
+						if(last_val->kind!=temp1 || !type_equal(last_val->val_type,temp2))
 							printf("Error type 5 at Line %d: incompatible type near =\n",h->line);
 				}
 			}
@@ -283,7 +290,428 @@ void semantic_analysis(Node* h)
 }
 void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h)
 {
-	
+	if(h->child_count==1)
+	{
+		/* ID
+		 * INT
+		 * FLOAT
+		 */
+		switch(h->child[0]->type)
+		{
+			case _ID:
+			{
+				val_d* temp=(val_d*)check_id(h->child[0],id_val);
+				if(temp!=NULL)
+				{
+					if(temp->is_true_value==0)
+					{
+						printf("Error type 1 at Line %d: %s is a field of a struct\n",h->line,temp->name);
+						*exp_kind=USER_DEFINED;
+						*exp_type=NULL;
+					}
+					else
+					{
+						*exp_kind=temp->kind;
+						*exp_type=temp->val_type;
+					}
+				}
+				else
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				break;
+			}
+			case _INT:
+			{
+				*exp_kind=_int;
+				*exp_type=NULL;
+				break;
+			}
+			case _FLOAT:
+			{
+				*exp_kind=_float;
+				*exp_type=NULL;
+				break;
+			}
+		}
+	}
+	else if(h->child_count==2)
+	{
+		/* NOT Exp
+		 * MINUS Exp
+		 */
+		val_kind temp1;
+		type_d* temp2;
+		ana_exp(&temp1,&temp2,h->child[1]);
+		if(h->child[0]->type==_NOT)
+		{
+			if((temp1==USER_DEFINED && temp2!=NULL) || temp1==_float)
+			{
+				printf("Error type 7 at Line %d: only int can use \"!\"(not)\n",h->line);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+			}
+			else 
+			{
+				*exp_kind=temp1;
+				*exp_type=temp2;
+			}
+		}
+		else
+		{
+			if(temp1==USER_DEFINED && temp2!=NULL)
+			{
+				printf("Error type 7 at Line %d: only int or float can use \"-\"(minus)\n",h->line);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+			}
+			else 
+			{
+				*exp_kind=temp1;
+				*exp_type=temp2;
+			}
+		}
+	}
+	else if(h->child_count==3)
+	{
+		/*
+		 *  Exp ASSIGNOP Exp
+		 *  Exp AND Exp
+		 *  Exp OR Exp
+		 *  Exp (cal) Exp : cal requires both EXPs are int or (both are) float 
+		 *  LP Exp RP 
+		 *  ID LP RP
+		 *  Exp DOT ID
+		 */
+		switch(h->child[1]->type)
+		{
+			case Exp:
+			{
+				ana_exp(exp_kind,exp_type,h->child[1]);
+				break;
+			}
+			case _LP:
+			{
+				if(find_value(h->child[0]->name)!=NULL)
+				{
+					printf("Error type 11 at Line %d: %s is a variable, not a function\n",h->line,h->child[0]->name);
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					return;
+				}
+				func_d* temp=(func_d*)check_id(h->child[0],id_func);
+				if(temp==NULL)
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				else if(temp->parameter_count==0)
+				{
+					*exp_kind=temp->return_kind;
+					*exp_type=temp->return_type;
+				}
+				else
+				{
+					printf("Error type 9 at Line %d: unmatched parameters for function %s\n",h->line,temp->name);
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				break;
+			}
+			case _DOT:
+			{
+				val_kind temp1;
+				type_d* temp2;
+				ana_exp(&temp1,&temp2,h->child[0]);
+				if(temp1!=USER_DEFINED)
+				{
+					printf("Error type 13 at Line %d: use \".\" on none struct variable\n",h->line);
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				else if(temp2==NULL)
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				else if(temp2->kind==_array)
+				{
+					printf("Error type 13 at Line %d: use \".\" on none struct variable\n",h->line);
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				else
+				{
+					val_d* temp=find_value(h->child[2]->name);
+					for(int i=0;i<temp2->def.s->define_count;i++)
+						if(temp2->def.s->def_list[i]==temp)
+						{
+							*exp_kind=temp->kind;
+							*exp_type=temp->val_type;
+							return;
+						}
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					printf("Error type 14 at Line %d: undefined field %s for struct %s\n",h->line,h->child[2]->name,temp2->name);
+				}
+				break;
+			}
+			case _AND:
+			case _OR:
+			{
+				val_kind temp1,temp3;
+				type_d* temp2,*temp4;
+				ana_exp(&temp1,&temp2,h->child[0]);
+				ana_exp(&temp3,&temp4,h->child[2]);
+				if((temp1==USER_DEFINED && temp2==NULL) || (temp3==USER_DEFINED && temp4==NULL))
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				else if(temp1!=_int || temp3!=_int)
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					printf("Error type 7 at Line %d: only int can be used as boolean\n",h->line);
+				}
+				else
+				{
+					*exp_kind=_int;
+					*exp_type=NULL;
+				}
+				break;
+			}
+			case _ASSIGNOP:
+			{
+				if(check_left(h->child[0])==0)
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					printf("Error type 6 at Line %d: the left-hand side of \"=\" must have left side value\n",h->line);
+				}
+				else
+				{
+					val_kind temp1,temp3;
+					type_d *temp2,*temp4;
+					ana_exp(&temp1,&temp2,h->child[0]);
+					ana_exp(&temp3,&temp4,h->child[2]);
+					if((temp1==USER_DEFINED && temp2==NULL) || (temp3==USER_DEFINED && temp4==NULL))
+					{
+						*exp_kind=USER_DEFINED;
+						*exp_type=NULL;
+					}
+					else if(temp1==temp3 && type_equal(temp2,temp4))
+					{
+						*exp_kind=temp1;
+						*exp_type=NULL;
+					}
+					else
+					{
+						*exp_kind=USER_DEFINED;
+						*exp_type=NULL;
+						printf("Error type 5 at Line %d: both sides of \"=\" must be the same type\n",h->line);
+					}
+				}
+				break;
+			}
+			default:
+			{
+				val_kind temp1,temp3;
+				type_d *temp2,*temp4;
+				ana_exp(&temp1,&temp2,h->child[0]);
+				ana_exp(&temp3,&temp4,h->child[2]);
+				if((temp1==USER_DEFINED && temp2==NULL) || (temp3==USER_DEFINED && temp4==NULL))
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+				}
+				else if(temp1==temp3 && (temp1==_int || temp1==_float))
+				{
+					*exp_kind=temp1;
+					*exp_type=NULL;
+				}
+				else
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					printf("Error type 7 at Line %d: calculation requires both EXPs are int or (both are) float\n",h->line);
+				}
+				break;
+			}
+		}
+	}
+	else if(h->child_count==4)
+	{
+		/* Exp LB Exp RB
+		 * ID LP Args RP
+		 */
+		if(h->child[0]->type==Exp)
+		{
+			//找到头部数组变量的定义
+			Node* head=h;
+			while(head->child_count==4 && head->child[0]->type==Exp)
+			{
+				head=head->child[0];
+			}
+			if(!(head->child_count==1 && head->child[0]->type==_ID))
+			{
+				printf("Error type 10 at Line %d: use \"[]\" on none array variable\n",h->line);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			val_d* temp=(val_d*)check_id(head->child[0],id_val);
+			if(temp==NULL)
+			{
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			if(temp->kind!=USER_DEFINED || temp->val_type->kind!=_array)
+			{
+				printf("Error type 10 at Line %d: use \"[]\" on none array variable\n",h->line);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			//顺次偏移，一个[]对应数组定义链表一层
+			array_def_list* current=temp->val_type->def.a;
+			head=head->father;
+			while(head!=h && current->dimension!=0)
+			{
+				//检查[]内数字合法性
+				val_kind temp1;
+				type_d* temp2;
+				ana_exp(&temp1,&temp2,head->child[2]);
+				if(temp1==USER_DEFINED && temp2==NULL)
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					return;
+				}
+				else if(temp1!=_int)
+				{
+					printf("Error type 12 at Line %d: the type of exp between \"[]\" should be int\n",h->line);
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					return;
+				}
+				head=head->father;
+				current=current->next;
+			}
+			if(current->dimension==0 && head!=h)
+			{
+				//[]过多
+				printf("Error type 10 at Line %d: use \"[]\" on none array variable\n",h->line);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			//检查最后一个[]内数字的合法性
+			val_kind temp1;
+			type_d* temp2;
+			ana_exp(&temp1,&temp2,head->child[2]);
+			if(temp1==USER_DEFINED && temp2==NULL)
+			{
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			else if(temp1!=_int)
+			{
+				printf("Error type 12 at Line %d: the type of exp between \"[]\" should be int\n",h->line);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			if(head==h && current->dimension==0)
+			{
+				//刚好对齐，取出基本元素定义
+				*exp_kind=current->kind;
+				*exp_type=current->val_type;
+				return;
+			}
+			else
+			{
+				//取得部分数组。复制，新建一个对应的类型返回上层。
+				type_d* p=new_type(NULL);
+				add_type_declaration(p);
+				current=current->next;
+				array_def_list* copy_current=p->def.a;
+				while(current!=NULL)
+				{
+					array_def_list* copy_temp=(array_def_list*)malloc(sizeof(array_def_list));
+					memcpy(copy_temp,current,sizeof(array_def_list));
+					copy_temp->next=NULL;
+					if(copy_current==NULL)
+						p->def.a=copy_temp;
+					else
+						copy_current->next=copy_temp;
+					copy_current=copy_temp;
+					current=current->next;
+				}
+				*exp_kind=USER_DEFINED;
+				*exp_type=p;
+			}
+		}
+		else
+		{
+			if(find_value(h->child[0]->name)!=NULL)
+			{
+				printf("Error type 11 at Line %d: %s is a variable, not a function\n",h->line,h->child[0]->name);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			func_d* temp=(func_d*)check_id(h->child[0],id_func);
+			if(temp==NULL)
+			{
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+			}
+			//计算args里面有几个参数
+			Node* args_temp=h->child[2];
+			int count=1;
+			while(args_temp->child_count==3)
+			{
+				count++;
+				args_temp=args_temp->child[2];
+			}
+			if(count!=temp->parameter_count)
+			{
+				printf("Error type 9 at Line %d: unmatched parameters for function %s\n",h->line,temp->name);
+				*exp_kind=USER_DEFINED;
+				*exp_type=NULL;
+				return;
+			}
+			//依次检查各个参数
+			args_temp=h->child[2];
+			for(int i=0;i<count;i++)
+			{
+				val_kind temp1;
+				type_d* temp2;
+				ana_exp(&temp1,&temp2,args_temp->child[0]);
+				if(temp1==USER_DEFINED && temp2==NULL)
+				{
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					return;
+				}
+				if(temp1!=temp->kinds[i] || temp2!=temp->parameters[i])
+				{
+					printf("Error type 9 at Line %d: unmatched parameters for function %s\n",h->line,temp->name);
+					*exp_kind=USER_DEFINED;
+					*exp_type=NULL;
+					return;
+				}
+				if(args_temp->child_count==3)
+					args_temp=args_temp->child[2];
+			}
+			*exp_kind=temp->return_kind;
+			*exp_type=temp->return_type;
+		}
+	}
 }
 void* check_id(Node* h,id_type identity)
 {
@@ -301,4 +729,14 @@ void* check_id(Node* h,id_type identity)
 			printf("Error type 1 at Line %d: undefined variable %s\n",h->line,h->name);
 		return temp;
 	}
+}
+int check_left(Node* h)
+{
+	if(h->child_count==1 && h->child[0]->type==_ID)
+		return 1;
+	if(h->child_count==3 && h->child[1]->type==_DOT)
+		return 1;
+	if(h->child_count==4 && h->child[1]->type==_LB)
+		return 1;
+	return 0;
 }
