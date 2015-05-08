@@ -12,6 +12,8 @@ struct
 	func_d* funcs;
 	value_stack* values;
 }symbols;
+//强制出栈，不带保存。
+void value_stack_pop_violent();
 
 void itoa(unsigned long val, char* buf,unsigned radix)
 {
@@ -66,7 +68,7 @@ void init_symbol_table()
 void destroy_symbol_table()
 {
 	while(symbols.values!=NULL)
-		value_stack_pop();
+		value_stack_pop_violent();
 	{
 		func_d* p;
 		while(symbols.funcs!=NULL)
@@ -240,14 +242,30 @@ void value_stack_push()
 void value_stack_pop()
 {
 	val_d* p;
-	while(symbols.values->values!=NULL)
-	{
-		p=symbols.values->values;
-		symbols.values->values=symbols.values->values->next;
-		free(p);
-	}
 	value_stack* q=symbols.values;
 	symbols.values=symbols.values->next;
+	while(q->values!=NULL)
+	{
+		p=q->values;
+		q->values=q->values->next;
+		if(p->is_true_value)
+			free(p);
+		else
+			insert_head(symbols.values->values,p);
+	}	
+	free(q);
+}
+void value_stack_pop_violent()
+{
+	val_d* p;
+	value_stack* q=symbols.values;
+	symbols.values=symbols.values->next;
+	while(q->values!=NULL)
+	{
+		p=q->values;
+		q->values=q->values->next;
+		free(p);
+	}	
 	free(q);
 }
 int value_stack_check(const char* name)

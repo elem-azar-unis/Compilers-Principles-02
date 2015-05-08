@@ -1,19 +1,20 @@
-struct haha
+int func(int x,int y,struct haha
 {
 int c,n;
 struct{float d;}e;
 float p;
-}i;
-struct haha func(int x,int y,struct haha z)
+} z)
 {
-return z;
+return x;
 }
+struct c{int x;};
+struct haha{};
 int main()
 {
 	struct haha i[3][3];
 	float j=i[1][2].p+i[0][0].e.d*1.5;
 	int temp=i[1][1].c;
-	i[0][0]=func(1,1,i[0][0]);
+	temp=func(1,1,i[0][0]);
 	{int i;}
-	return j;
+	return temp;
 }

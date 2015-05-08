@@ -4,8 +4,9 @@ val_kind kind=USER_DEFINED;			//当前处理类型：int，float，用户定义�
 type_d* val_type=NULL;				//当前处理的用户定义类型的定义结构体指针（如果需要）
 func_d* current_func=NULL;			//当前正在处理的函数定义指针。
 int para_count=0;					//参数数目。
-val_d* paras[100];					//各参数定义。不想用链表了。一个结构体，一个函数的变量、参数不超过100个。
+val_d* paras[512];					//各参数定义。不想用链表了。一个结构体，一个函数的变量、参数不超过512个。
 int need_count=0;					//是否需要记录定义的变量。
+int structing=0;					//是否正在定义结构体，用于标志当前变量定义是否是结构体内的域定义
 int do_not_push=0;					//提醒在函数刚建立的CompSt不需要push符号表。
 val_d* last_val=NULL;				//最近定义的变量。
 typedef struct stack
@@ -13,8 +14,9 @@ typedef struct stack
 	val_kind kind;						//当前处理类型：int，float，用户定义类型
 	struct type_d* val_type;			//当前处理的用户定义类型的定义结构体指针（如果需要）
 	int para_count;						//参数数目。
-	val_d* paras[100];					//各参数定义。不想些链表了。一个结构体、一个函数的变量，参数不超过100个。
+	val_d* paras[512];					//各参数定义。不想些链表了。一个结构体、一个函数的变量，参数不超过512个。
 	int need_count;						//是否需要记录定义的变量。
+	int structing;						//是否正在定义结构体，用于标志当前变量定义是否是结构体内的域定义
 	struct stack* next;
 }stack;
 stack* st_head=NULL;
@@ -35,6 +37,7 @@ void push()
 	p->val_type=val_type;
 	p->para_count=para_count;
 	p->need_count=need_count;
+	p->structing=structing;
 	for(int i=0;i<para_count;i++)
 		p->paras[i]=paras[i];
 	para_count=0;
@@ -47,6 +50,7 @@ void pop()
 	kind=p->kind;
 	val_type=p->val_type;
 	para_count=p->para_count;
+	structing=p->structing;
 	for(int i=0;i<p->para_count;i++)
 		paras[i]=p->paras[i];
 	need_count=p->need_count;
@@ -54,7 +58,7 @@ void pop()
 }
 void semantic_analysis(Node* h)
 {
-	//printf("%s %d\n",get_type_name(h->type),h->line);
+	//printf("begin: %s %d\n",get_type_name(h->type),h->line);
 	if(h==NULL)return;	
 	switch(h->type)
 	{
@@ -102,6 +106,7 @@ void semantic_analysis(Node* h)
 					val_type=new_type(name);
 					add_type_declaration(val_type);
 					push();
+					structing=1;
 					need_count=1;
 					para_count=0;
 					semantic_analysis(h->child[3]);
@@ -110,6 +115,7 @@ void semantic_analysis(Node* h)
 					for(int i=0;i<para_count;i++)
 						st_head->val_type->def.s->def_list[i]=paras[i];
 					need_count=0;
+					structing=0;
 					pop();
 				}
 			}
@@ -160,6 +166,7 @@ void semantic_analysis(Node* h)
 					need_count=0;
 					semantic_analysis(h->child[2]);
 					do_not_push=0;
+					current_func=NULL;
 				}
 			}
 			else
@@ -178,7 +185,7 @@ void semantic_analysis(Node* h)
 			{
 				val_d* che=find_value(temp->name);
 				int i=-1;
-				if(do_not_push==0 && need_count==1)
+				if(structing)
 					for(i=0;i<para_count;i++)
 						if(paras[i]==che)
 							break;
@@ -191,7 +198,7 @@ void semantic_analysis(Node* h)
 			else if(!(kind==USER_DEFINED && val_type==NULL))
 			{
 				val_d* v=new_value(temp->name);
-				v->is_true_value=(do_not_push==1 || need_count==0);
+				v->is_true_value=!structing;
 				if(h->child_count==1)
 				{
 					v->kind=kind;
@@ -266,7 +273,7 @@ void semantic_analysis(Node* h)
 			semantic_analysis(h->child[0]);
 			if(h->child_count==3)
 			{
-				if(need_count==1 && do_not_push==0)
+				if(structing)
 					printf("Error type 15 at Line %d: can't initialize a field while defining the struct\n",h->line);
 				else
 				{
@@ -287,6 +294,7 @@ void semantic_analysis(Node* h)
 			break;
 		}
 	}
+	//printf("fin: %s %d\n",get_type_name(h->type),h->line);
 }
 void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h)
 {
@@ -669,6 +677,7 @@ void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h)
 			{
 				*exp_kind=USER_DEFINED;
 				*exp_type=NULL;
+				return;
 			}
 			//计算args里面有几个参数
 			Node* args_temp=h->child[2];
