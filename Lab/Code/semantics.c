@@ -512,7 +512,7 @@ void ana_exp(val_kind* exp_kind,type_d** exp_type,Node* h)
 					else if(temp1==temp3 && type_equal(temp2,temp4))
 					{
 						*exp_kind=temp1;
-						*exp_type=NULL;
+						*exp_type=temp2;
 					}
 					else
 					{

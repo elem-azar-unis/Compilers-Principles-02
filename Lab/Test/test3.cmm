@@ -1,5 +1,26 @@
-int inc()
+struct A{
+	int a;
+	int b;
+	struct B{
+		int z[2][4];
+		struct C{
+			int y;
+		} x;
+	} u;
+	struct B w;
+};
+int to, from;
+int main()
 {
-	int i
-	i = i + 1;
+	int k[3][4][5];
+	float j = 2*m;
+	int i=j;
+	struct A d;
+	struct Z e;
+	k = j;
+	j && j;
+	j || j;
+	1 = i;
+	hello(i, j);
+	return 2.3;
 }
